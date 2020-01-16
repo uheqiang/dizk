@@ -35,6 +35,10 @@ public class Fp extends AbstractFieldElementExpanded<Fp> implements Serializable
         return this;
     }
 
+    public Fp self(final BigInteger number){
+        return new Fp(number, FpParameters);
+    }
+
     public Fp add(final Fp that) {
         return new Fp(number.add(that.number), FpParameters);
     }

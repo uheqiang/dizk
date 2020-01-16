@@ -39,6 +39,12 @@ public class Fp2 extends AbstractFieldElement<Fp2> implements Serializable {
         return this;
     }
 
+    @Override
+    public Fp2 self(BigInteger that) {
+        return null;
+    }
+
+
     public Fp2 add(final Fp2 that) {
         return new Fp2(c0.add(that.c0), c1.add(that.c1), Fp2Parameters);
     }

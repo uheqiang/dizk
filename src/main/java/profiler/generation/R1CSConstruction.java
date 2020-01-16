@@ -10,6 +10,7 @@ package profiler.generation;
 import algebra.fields.AbstractFieldElementExpanded;
 import common.Utils;
 import configuration.Configuration;
+import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.spark.api.java.JavaPairRDD;
 import relations.objects.*;
 import relations.r1cs.R1CSRelation;
@@ -18,6 +19,7 @@ import scala.Tuple2;
 import scala.Tuple3;
 
 import java.io.Serializable;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -26,21 +28,368 @@ import java.util.Iterator;
 public class R1CSConstruction implements Serializable {
 
     public static <FieldT extends AbstractFieldElementExpanded<FieldT>> Tuple3<R1CSRelation<FieldT>,
-            Assignment<FieldT>,
-            Assignment<FieldT>>
-    serialConstruct(
+            Assignment<FieldT>, Assignment<FieldT>> addConstruct(final int numInputs,
+                                                                 final BigInteger valueA,
+                                                                 final BigInteger valueB,
+                                                                 final FieldT fieldFactory) {
+
+        // 一个R1CS系统，包括多个R1CS约束。
+        final int numConstraints = 2;
+        assert (numInputs <= numConstraints + 1);
+
+        final int numAuxiliary = 3 + numConstraints - numInputs;
+        final int numVariables = 3 + numConstraints;
+
+        final FieldT one = fieldFactory.one();
+        final FieldT a = fieldFactory.self(valueA);
+        final FieldT b = fieldFactory.self(valueB);
+
+        final Assignment<FieldT> oneFullAssignment = new Assignment<>();
+        oneFullAssignment.add(one);
+        oneFullAssignment.add(a);
+        oneFullAssignment.add(b);
+
+        //一个R1CS约束，可以由a/b/c三个linear_combination表示。
+        //LinearCombination描述了一个完整的线性组合。一个linear combination由多个linear term组成
+        final R1CSConstraints<FieldT> constraints = new R1CSConstraints<>();
+        final LinearCombination<FieldT> A = new LinearCombination<>();
+        final LinearCombination<FieldT> B = new LinearCombination<>();
+        final LinearCombination<FieldT> C = new LinearCombination<>();
+
+        // a + b = c
+        A.add(new LinearTerm<>((long) 1, one));
+        A.add(new LinearTerm<>((long) 2, one));
+        B.add(new LinearTerm<>((long) 0, one));
+        C.add(new LinearTerm<>((long) 3, one));
+        final FieldT tmp = a.add(b);
+        oneFullAssignment.add(tmp);
+        System.out.println("a: " + a.toBigInteger());
+        System.out.println("b: " + b.toBigInteger());
+        System.out.println("c: " + tmp.toBigInteger());
+
+        constraints.add(new R1CSConstraint<>(A, B, C));
+
+        final LinearCombination<FieldT> A1 = new LinearCombination<>();
+        final LinearCombination<FieldT> B1 = new LinearCombination<>();
+        final LinearCombination<FieldT> C1 = new LinearCombination<>();
+
+        FieldT res = fieldFactory.zero();
+        for (int i = 1; i < numVariables - 1; i++) {
+            A1.add(new LinearTerm<>((long) i, one));
+            B1.add(new LinearTerm<>((long) i, one));
+            res = res.add(oneFullAssignment.get(i));
+        }
+        C1.add(new LinearTerm<>((long) numVariables - 1, one));
+        oneFullAssignment.add(res.square());
+
+        constraints.add(new R1CSConstraint<>(A1, B1, C1));
+
+        final R1CSRelation<FieldT> r1cs = new R1CSRelation<>(constraints, numInputs, numAuxiliary);
+        final Assignment<FieldT> primary = new Assignment<>(oneFullAssignment.subList(0, numInputs));
+        final Assignment<FieldT> auxiliary = new Assignment<>(oneFullAssignment.subList(numInputs, oneFullAssignment.size()));
+
+        assert (r1cs.numInputs() == numInputs);
+        assert (r1cs.numVariables() >= numInputs);
+        assert (r1cs.numVariables() == oneFullAssignment.size());
+        assert (r1cs.numConstraints() == numConstraints);
+        assert (r1cs.isSatisfied(primary, auxiliary));
+
+        return new Tuple3<>(r1cs, primary, auxiliary);
+    }
+
+    public static <FieldT extends AbstractFieldElementExpanded<FieldT>> Tuple3<R1CSRelation<FieldT>,
+            Assignment<FieldT>, Assignment<FieldT>> multiConstruct(final int numInputs,
+                                                                   final BigInteger valueA,
+                                                                   final BigInteger valueB,
+                                                                   final FieldT fieldFactory) {
+
+        // 一个R1CS系统，包括多个R1CS约束。
+        final int numConstraints = 1 + 1;
+        assert (numInputs <= numConstraints + 1);
+
+        final int numAuxiliary = 3 + numConstraints - numInputs;
+        final int numVariables = 3 + numConstraints;
+
+        final FieldT one = fieldFactory.one();
+        final FieldT a = fieldFactory.self(valueA);
+        final FieldT b = fieldFactory.self(valueB);
+
+        final Assignment<FieldT> oneFullAssignment = new Assignment<>();
+        oneFullAssignment.add(one);
+        oneFullAssignment.add(a);
+        oneFullAssignment.add(b);
+
+        //一个R1CS约束，可以由a/b/c三个linear_combination表示。
+        //LinearCombination描述了一个完整的线性组合。一个linear combination由多个linear term组成
+        final R1CSConstraints<FieldT> constraints = new R1CSConstraints<>();
+        final LinearCombination<FieldT> A = new LinearCombination<>();
+        final LinearCombination<FieldT> B = new LinearCombination<>();
+        final LinearCombination<FieldT> C = new LinearCombination<>();
+
+        // a * b = c.
+        A.add(new LinearTerm<>((long) 1, one));
+        B.add(new LinearTerm<>((long) 2, one));
+        C.add(new LinearTerm<>((long) 3, one));
+        final FieldT tmp = a.mul(b);
+        oneFullAssignment.add(tmp);
+        constraints.add(new R1CSConstraint<>(A, B, C));
+        System.out.println("a: " + a.toBigInteger());
+        System.out.println("b: " + b.toBigInteger());
+        System.out.println("c: " + tmp.toBigInteger());
+
+        final LinearCombination<FieldT> A1 = new LinearCombination<>();
+        final LinearCombination<FieldT> B1 = new LinearCombination<>();
+        final LinearCombination<FieldT> C1 = new LinearCombination<>();
+
+        FieldT res = fieldFactory.zero();
+        for (int i = 1; i < numVariables - 1; i++) {
+            A1.add(new LinearTerm<>((long) i, one));
+            B1.add(new LinearTerm<>((long) i, one));
+            res = res.add(oneFullAssignment.get(i));
+        }
+        C1.add(new LinearTerm<>((long) numVariables - 1, one));
+        oneFullAssignment.add(res.square());
+
+        constraints.add(new R1CSConstraint<>(A1, B1, C1));
+
+        final R1CSRelation<FieldT> r1cs = new R1CSRelation<>(constraints, numInputs, numAuxiliary);
+        final Assignment<FieldT> primary = new Assignment<>(oneFullAssignment.subList(0, numInputs));
+        final Assignment<FieldT> auxiliary = new Assignment<>(oneFullAssignment.subList(numInputs, oneFullAssignment.size()));
+
+        assert (r1cs.numInputs() == numInputs);
+        assert (r1cs.numVariables() >= numInputs);
+        assert (r1cs.numVariables() == oneFullAssignment.size());
+        assert (r1cs.numConstraints() == numConstraints);
+        assert (r1cs.isSatisfied(primary, auxiliary));
+
+        return new Tuple3<>(r1cs, primary, auxiliary);
+    }
+
+    public static <FieldT extends AbstractFieldElementExpanded<FieldT>> Tuple3<R1CSRelation<FieldT>,
+            Assignment<FieldT>, Assignment<FieldT>> serialRangProofConstruct(final int numInputs,
+                                                                             final char[] wBits,
+                                                                             final BigInteger w,
+                                                                             final FieldT fieldFactory) {
+        assert(wBits.length > 256);
+
+        // 一个R1CS系统，包括多个R1CS约束。
+        final int numConstraints = (1 + wBits.length)*2 + 1;//13
+        assert (numInputs <= numConstraints + 1);
+
+//        final int numAuxiliary = 3 + numConstraints - numInputs;
+        final int numAuxiliary = 2 + numConstraints - numInputs;
+        final int numVariables = numInputs + numAuxiliary;
+
+        final FieldT one = fieldFactory.one();
+
+        final Assignment<FieldT> oneFullAssignment = new Assignment<>();
+        oneFullAssignment.add(one);
+//        oneFullAssignment.add(fieldFactory.self(new BigInteger(String.valueOf(wBits[0]))));
+//        oneFullAssignment.add(fieldFactory.self(new BigInteger("1")));//2^0
+
+        FieldT sum = fieldFactory.zero();
+        FieldT tmp = fieldFactory.zero();
+        final R1CSConstraints<FieldT> constraints = new R1CSConstraints<>();
+        for (int i = 0; i <= numConstraints - 2; i++) {
+            //一个R1CS约束，可以由a/b/c三个linear_combination表示。
+            //LinearCombination描述了一个完整的线性组合。一个linear combination由多个linear term组成
+            final LinearCombination<FieldT> A = new LinearCombination<>();
+            final LinearCombination<FieldT> B = new LinearCombination<>();
+            final LinearCombination<FieldT> C = new LinearCombination<>();
+
+            if (i % 2 == 0) {
+                // a * b = c
+                A.add(new LinearTerm<>((long) i + 1, one));
+                B.add(new LinearTerm<>((long) i + 2, one));
+                C.add(new LinearTerm<>((long) i + 3, one));
+
+                if (i != numConstraints - 3){
+                   //wBits
+                    Integer multi = Integer.valueOf(String.valueOf(wBits[i/2])) << i/2;
+                    tmp = fieldFactory.self(BigInteger.valueOf(multi));
+                    oneFullAssignment.add(tmp);
+                } else {
+                    //w
+                    tmp = fieldFactory.self(BigInteger.valueOf(-1).multiply(w));
+                    oneFullAssignment.add(tmp);
+                }
+            } else {
+                // a + b = c
+                A.add(new LinearTerm<>((long) i + 1, one));
+                A.add(new LinearTerm<>((long) i + 2, one));
+                B.add(new LinearTerm<>((long) 0, one));
+                C.add(new LinearTerm<>((long) i + 3, one));
+
+                sum = sum.add(tmp);
+                oneFullAssignment.add(sum);
+            }
+            constraints.add(new R1CSConstraint<>(A, B, C));
+
+//            if (i != numConstraints - 1){
+//                //wBits
+//            } else {
+//                //w
+//                // a * b = c
+//                A.add(new LinearTerm<>((long) i + 1, one));
+//                B.add(new LinearTerm<>((long) i + 2, one));
+//                C.add(new LinearTerm<>((long) i + 3, one));
+//                constraints.add(new R1CSConstraint<>(A, B, C));
+//                final FieldT tmp = fieldFactory.self(BigInteger.valueOf(-1)).mul(fieldFactory.self(w));
+//                oneFullAssignment.add(tmp);
+//
+//                // a + b = c
+//                A.add(new LinearTerm<>((long) i + 1, one));
+//                A.add(new LinearTerm<>((long) i + 2, one));
+//                B.add(new LinearTerm<>((long) 0, one));
+//                C.add(new LinearTerm<>((long) i + 3, one));
+//
+//                final FieldT result = sum.add(tmp);
+//                oneFullAssignment.add(result);
+//                constraints.add(new R1CSConstraint<>(A, B, C));
+//            }
+
+        }
+
+        final LinearCombination<FieldT> A = new LinearCombination<>();
+        final LinearCombination<FieldT> B = new LinearCombination<>();
+        final LinearCombination<FieldT> C = new LinearCombination<>();
+
+        FieldT res = fieldFactory.zero();
+        for (int i = 1; i < numVariables - 1; i++) {
+            A.add(new LinearTerm<>((long) i, one));
+            B.add(new LinearTerm<>((long) i, one));
+
+            res = res.add(oneFullAssignment.get(i));
+        }
+        C.add(new LinearTerm<>((long) numVariables - 1, one));
+        oneFullAssignment.add(res.square());
+
+        constraints.add(new R1CSConstraint<>(A, B, C));
+
+        final R1CSRelation<FieldT> r1cs = new R1CSRelation<>(constraints, numInputs, numAuxiliary);
+        final Assignment<FieldT> primary = new Assignment<>(oneFullAssignment.subList(0, numInputs));
+        final Assignment<FieldT> auxiliary = new Assignment<>(oneFullAssignment.subList(numInputs, oneFullAssignment.size()));
+
+        assert (r1cs.numInputs() == numInputs);
+        assert (r1cs.numVariables() >= numInputs);
+
+//        System.out.println(r1cs.numVariables());
+//        System.out.println(oneFullAssignment.size());
+        assert (r1cs.numVariables() == oneFullAssignment.size());
+
+        System.out.println(r1cs.numConstraints());
+        System.out.println(numConstraints);
+        assert (r1cs.numConstraints() == numConstraints);
+
+        assert (r1cs.isSatisfied(primary, auxiliary));
+
+        return new Tuple3<>(r1cs, primary, auxiliary);
+    }
+
+    /**
+     * 账户余额hash验证
+     * @param balanceHash 余额hash
+     * @param balancePlaintext 余额明文
+     * @param fieldFactory
+     * @return
+     */
+    public static <FieldT extends AbstractFieldElementExpanded<FieldT>> Tuple3<R1CSRelation<FieldT>,
+            Assignment<FieldT>, Assignment<FieldT>> serialBalanceHashConstruct(
+            final String balanceHash,
+            final String balancePlaintext,
+            final FieldT fieldFactory) {
+
+        final int numInputs = 2;
+        final int numConstraints = 2;
+        assert (numInputs <= numConstraints + 1);
+//        final int numAuxiliary = 4 + numConstraints - numInputs;
+
+        final FieldT one = fieldFactory.one();
+        FieldT a = fieldFactory.self(new BigInteger(balanceHash,16));
+        FieldT b = fieldFactory.self(new BigInteger("-1"));
+        FieldT c = fieldFactory.self(new BigInteger(zk_proof_systems.zkSNARK.Utils.sha256(balancePlaintext),16));
+
+        final Assignment<FieldT> oneFullAssignment = new Assignment<>();
+        oneFullAssignment.add(one);
+        oneFullAssignment.add(a);
+        oneFullAssignment.add(b);
+        oneFullAssignment.add(c);
+
+        final int numAuxiliary = oneFullAssignment.size() + numConstraints - numInputs;
+
+        final R1CSConstraints<FieldT> constraints = new R1CSConstraints<>();
+        for (int i = 0; i < numConstraints; i++) {
+            //一个R1CS约束，可以由a/b/c三个linear_combination表示。
+            //LinearCombination描述了一个完整的线性组合。一个linear combination由多个linear term组成
+            final LinearCombination<FieldT> A = new LinearCombination<>();
+            final LinearCombination<FieldT> B = new LinearCombination<>();
+            final LinearCombination<FieldT> C = new LinearCombination<>();
+
+            if (i % 2 == 0) {
+                // a * b = c.
+                A.add(new LinearTerm<>((long) 2, one));
+                B.add(new LinearTerm<>((long) 3, one));
+                C.add(new LinearTerm<>((long) 4, one));
+
+                final FieldT tmp = a.mul(b);
+                a = tmp;
+                oneFullAssignment.add(tmp);
+            } else {
+                // a + b = c
+                A.add(new LinearTerm<>((long) 3, one));
+                A.add(new LinearTerm<>((long) 4, one));
+                B.add(new LinearTerm<>((long) 0, one));
+                C.add(new LinearTerm<>((long) 5, one));
+
+                final FieldT tmp = a.add(c);
+                oneFullAssignment.add(tmp);
+            }
+            constraints.add(new R1CSConstraint<>(A, B, C));
+        }
+
+        final R1CSRelation<FieldT> r1cs = new R1CSRelation<>(constraints, numInputs, numAuxiliary);
+        final Assignment<FieldT> primary = new Assignment<>(oneFullAssignment.subList(0, numInputs));
+        final Assignment<FieldT> auxiliary = new Assignment<>(oneFullAssignment.subList(numInputs, oneFullAssignment.size()));
+
+        assert (r1cs.numInputs() == numInputs);
+        assert (r1cs.numVariables() >= numInputs);
+        assert (r1cs.numVariables() == oneFullAssignment.size());
+        assert (r1cs.numConstraints() == numConstraints);
+        assert (r1cs.isSatisfied(primary, auxiliary));
+
+        return new Tuple3<>(r1cs, primary, auxiliary);
+    }
+
+    /**
+     * 串行计算
+     * @param numConstraints
+     * @param numInputs
+     * @param fieldFactory
+     * @param config
+     * @param <FieldT>
+     * @return
+     */
+    public static <FieldT extends AbstractFieldElementExpanded<FieldT>> Tuple3<R1CSRelation<FieldT>,
+            Assignment<FieldT>, Assignment<FieldT>> serialConstruct(
             final int numConstraints,
             final int numInputs,
             final FieldT fieldFactory,
             final Configuration config) {
+
+        //一个R1CS系统，包括多个R1CS约束。当然，每个约束的向量的长度是固定的（primary input size + auxiliary input size + 1）。
         assert (numInputs <= numConstraints + 1);
 
         final int numAuxiliary = 3 + numConstraints - numInputs;
         final int numVariables = numInputs + numAuxiliary;
 
         final FieldT one = fieldFactory.one();
-        FieldT a = fieldFactory.random(config.seed(), config.secureSeed());
-        FieldT b = fieldFactory.random(config.seed(), config.secureSeed());
+//        FieldT a = fieldFactory.random(config.seed(), config.secureSeed());
+//        FieldT b = fieldFactory.random(config.seed(), config.secureSeed());
+
+        FieldT a = fieldFactory.one();
+        FieldT b = fieldFactory.one();
+        System.out.println("a: " + a.toBigInteger());
+        System.out.println("b: " + b.toBigInteger());
 
         final Assignment<FieldT> oneFullAssignment = new Assignment<>();
         oneFullAssignment.add(one);
@@ -49,6 +398,8 @@ public class R1CSConstruction implements Serializable {
 
         final R1CSConstraints<FieldT> constraints = new R1CSConstraints<>();
         for (int i = 0; i < numConstraints - 1; i++) {
+            //一个R1CS约束，可以由a/b/c三个linear_combination表示。
+            //LinearCombination描述了一个完整的线性组合。一个linear combination由多个linear term组成
             final LinearCombination<FieldT> A = new LinearCombination<>();
             final LinearCombination<FieldT> B = new LinearCombination<>();
             final LinearCombination<FieldT> C = new LinearCombination<>();
@@ -71,6 +422,7 @@ public class R1CSConstruction implements Serializable {
                 C.add(new LinearTerm<>((long) i + 3, one));
 
                 final FieldT tmp = a.add(b);
+                System.out.println("c: " + tmp.toBigInteger());
                 a = b;
                 b = tmp;
                 oneFullAssignment.add(tmp);
@@ -97,8 +449,7 @@ public class R1CSConstruction implements Serializable {
 
         final R1CSRelation<FieldT> r1cs = new R1CSRelation<>(constraints, numInputs, numAuxiliary);
         final Assignment<FieldT> primary = new Assignment<>(oneFullAssignment.subList(0, numInputs));
-        final Assignment<FieldT> auxiliary = new Assignment<>(oneFullAssignment
-                .subList(numInputs, oneFullAssignment.size()));
+        final Assignment<FieldT> auxiliary = new Assignment<>(oneFullAssignment.subList(numInputs, oneFullAssignment.size()));
 
         assert (r1cs.numInputs() == numInputs);
         assert (r1cs.numVariables() >= numInputs);
@@ -109,6 +460,15 @@ public class R1CSConstruction implements Serializable {
         return new Tuple3<>(r1cs, primary, auxiliary);
     }
 
+    /**
+     * 并行计算
+     * @param numConstraints
+     * @param numInputs
+     * @param fieldFactory
+     * @param config
+     * @param <FieldT>
+     * @return
+     */
     public static <FieldT extends AbstractFieldElementExpanded<FieldT>>
     Tuple3<R1CSRelationRDD<FieldT>,
             Assignment<FieldT>,

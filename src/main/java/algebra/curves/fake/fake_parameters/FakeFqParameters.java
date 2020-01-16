@@ -45,6 +45,7 @@ public class FakeFqParameters extends AbstractFpParameters implements Serializab
         return ONE;
     }
 
+
     public BigInteger modulus() {
         if (modulus == null) {
             modulus = new BigInteger("1532495540865888858358347027150309183618765510462668801");

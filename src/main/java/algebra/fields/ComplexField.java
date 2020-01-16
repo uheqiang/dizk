@@ -44,6 +44,11 @@ public class ComplexField extends AbstractFieldElementExpanded<ComplexField>
         return this;
     }
 
+    @Override
+    public ComplexField self(BigInteger that) {
+        return null;
+    }
+
     public ComplexField add(final ComplexField that) {
         return new ComplexField(this.re + that.re, this.im + that.im);
     }

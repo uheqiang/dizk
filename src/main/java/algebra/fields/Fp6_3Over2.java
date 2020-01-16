@@ -10,6 +10,7 @@ package algebra.fields;
 import algebra.fields.abstractfieldparameters.AbstractFp6_3Over2_Parameters;
 
 import java.io.Serializable;
+import java.math.BigInteger;
 
 public class Fp6_3Over2 extends AbstractFieldElement<Fp6_3Over2> implements Serializable {
     protected final Fp2 c0;
@@ -30,6 +31,11 @@ public class Fp6_3Over2 extends AbstractFieldElement<Fp6_3Over2> implements Seri
 
     public Fp6_3Over2 self() {
         return this;
+    }
+
+    @Override
+    public Fp6_3Over2 self(BigInteger that) {
+        return null;
     }
 
     public Fp6_3Over2 add(final Fp6_3Over2 that) {

@@ -28,17 +28,26 @@ import algebra.curves.fake.fake_parameters.FakeFqParameters;
 import algebra.curves.fake.fake_parameters.FakeG1Parameters;
 import algebra.curves.fake.fake_parameters.FakeG2Parameters;
 import algebra.fields.Fp;
+import com.google.common.base.StandardSystemProperty;
 import configuration.Configuration;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import profiler.generation.R1CSConstruction;
+import profiler.utils.SparkUtils;
 import relations.objects.Assignment;
 import relations.r1cs.R1CSRelation;
 import scala.Tuple3;
+import scala.util.parsing.combinator.testing.Str;
 import zk_proof_systems.zkSNARK.objects.CRS;
 import zk_proof_systems.zkSNARK.objects.Proof;
 
 import java.io.Serializable;
+import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 import static org.junit.Assert.assertTrue;
 
@@ -72,8 +81,10 @@ public class SerialzkSNARKTest implements Serializable {
             BNG1T g1Factory,
             BNG2T g2Factory,
             BNPairingT pairing) {
+
         final Tuple3<R1CSRelation<BNFrT>, Assignment<BNFrT>, Assignment<BNFrT>> construction =
                 R1CSConstruction.serialConstruct(numConstraints, numInputs, fieldFactory, config);
+
         final R1CSRelation<BNFrT> r1cs = construction._1();
         final Assignment<BNFrT> primary = construction._2();
         final Assignment<BNFrT> fullAssignment = construction._3();
@@ -91,9 +102,60 @@ public class SerialzkSNARKTest implements Serializable {
     }
 
     @Test
-    public void SerialFakeProofSystemTest() {
-        final int numInputs = 1023;
-        final int numConstraints = 1024;
+    public void rangProofSystemTest(){
+//        System.out.println(new BigInteger("2").pow(256));
+        BigInteger w = new BigInteger("20", 10);
+        String str = w.toString(2);
+        System.out.println(str);
+        char[] chars = str.toCharArray();
+        char[] reverse = reverse(chars);
+        System.out.println(String.valueOf(reverse));
+//        int tmp = 0;
+//        for (int i = 0; i < reverse.length; i++){
+//            tmp += Integer.valueOf(String.valueOf(reverse[i]))<<i;
+//        }
+//        System.out.println(tmp);
+
+        final int numInputs = 1;
+        FakeInitialize.init();
+        final Fp fieldFactory = new FakeFqParameters().ONE();
+        final FakeG1 fakeG1Factory = new FakeG1Parameters().ONE();
+        final FakeG2 fakeG2Factory = new FakeG2Parameters().ONE();
+        final FakePairing fakePairing = new FakePairing();
+        final Tuple3<R1CSRelation<Fp>, Assignment<Fp>, Assignment<Fp>> construction =
+                R1CSConstruction.serialRangProofConstruct(numInputs,reverse,w,fieldFactory);
+        //r1cs: Rank-1 Constraint System
+        final R1CSRelation<Fp> r1cs = construction._1();
+        //primary就是"statement", auxiliary就是“witness”。
+        //public input info
+        final Assignment<Fp> primary = construction._2();
+        //private input info
+        final Assignment<Fp> auxiliary = construction._3();
+
+        final CRS<Fp, FakeG1, FakeG2, FakeGT> CRS = SerialSetup.generate(r1cs, fieldFactory, fakeG1Factory, fakeG2Factory, fakePairing, config);
+        final Proof<FakeG1, FakeG2> proof = SerialProver.prove(CRS.provingKey(), primary, auxiliary, fieldFactory, config);
+
+        final boolean isValid = Verifier.verify(CRS.verificationKey(), primary, proof, fakePairing, config);
+
+        System.out.println(isValid);
+        assertTrue(isValid);
+    }
+
+    private static char[] reverse(char[] chars){
+        char[] cs = new char[chars.length];
+        for (int i = chars.length - 1;i>=0;i--){
+            cs[chars.length - i - 1] = chars[i];
+        }
+        return cs;
+    }
+
+    @Test
+    public void balanceHashProofTest(){
+        String balancePlaintext = "90";
+        String balanceHash = Utils.sha256(balancePlaintext);
+        System.out.println(balanceHash);
+        BigInteger bigInteger = new BigInteger(balanceHash, 16);
+        System.out.println(bigInteger);
 
         FakeInitialize.init();
         final Fp fieldFactory = new FakeFqParameters().ONE();
@@ -101,18 +163,84 @@ public class SerialzkSNARKTest implements Serializable {
         final FakeG2 fakeG2Factory = new FakeG2Parameters().ONE();
         final FakePairing fakePairing = new FakePairing();
 
-        final Tuple3<R1CSRelation<Fp>, Assignment<Fp>, Assignment<Fp>> construction = R1CSConstruction
-                .serialConstruct(numConstraints, numInputs, fieldFactory, config);
+        final Tuple3<R1CSRelation<Fp>, Assignment<Fp>, Assignment<Fp>> construction =
+                R1CSConstruction.serialBalanceHashConstruct(balanceHash,balancePlaintext,fieldFactory);
+
+        //r1cs: Rank-1 Constraint System
         final R1CSRelation<Fp> r1cs = construction._1();
+        //primary就是"statement", auxiliary就是“witness”。
+        //public input info
         final Assignment<Fp> primary = construction._2();
+        //private input info
         final Assignment<Fp> auxiliary = construction._3();
 
-        final CRS<Fp, FakeG1, FakeG2, FakeGT> CRS = SerialSetup
-                .generate(r1cs, fieldFactory, fakeG1Factory, fakeG2Factory, fakePairing, config);
-        final Proof<FakeG1, FakeG2> proof = SerialProver
-                .prove(CRS.provingKey(), primary, auxiliary, fieldFactory, config);
-        final boolean isValid = Verifier
-                .verify(CRS.verificationKey(), primary, proof, fakePairing, config);
+        final CRS<Fp, FakeG1, FakeG2, FakeGT> CRS = SerialSetup.generate(r1cs, fieldFactory, fakeG1Factory, fakeG2Factory, fakePairing, config);
+        final Proof<FakeG1, FakeG2> proof = SerialProver.prove(CRS.provingKey(), primary, auxiliary, fieldFactory, config);
+        System.out.println("=================" + proof.toString().length());
+        final boolean isValid = Verifier.verify(CRS.verificationKey(), primary, proof, fakePairing, config);
+
+        System.out.println(isValid);
+        assertTrue(isValid);
+    }
+
+
+    @Test
+    public void fakeProofSystemTest(){
+        //1：a 和 b作为witness
+        //2：a 作为statement
+        final int numConstraints = 2;
+        FakeInitialize.init();
+        final Fp fieldFactory = new FakeFqParameters().ONE();
+        final FakeG1 fakeG1Factory = new FakeG1Parameters().ONE();
+        final FakeG2 fakeG2Factory = new FakeG2Parameters().ONE();
+        final FakePairing fakePairing = new FakePairing();
+
+//        final Tuple3<R1CSRelation<Fp>, Assignment<Fp>, Assignment<Fp>> construction =
+//                R1CSConstruction.multiConstruct(numConstraints,new BigInteger("20"),new BigInteger("10"), fieldFactory);
+        final Tuple3<R1CSRelation<Fp>, Assignment<Fp>, Assignment<Fp>> construction =
+                R1CSConstruction.addConstruct(numConstraints,new BigInteger("20"),new BigInteger("10"), fieldFactory);
+
+        //r1cs: Rank-1 Constraint System
+        final R1CSRelation<Fp> r1cs = construction._1();
+        //primary就是"statement", auxiliary就是“witness”。
+        //public input info
+        final Assignment<Fp> primary = construction._2();
+        //private input info
+        final Assignment<Fp> auxiliary = construction._3();
+
+        final CRS<Fp, FakeG1, FakeG2, FakeGT> CRS = SerialSetup.generate(r1cs, fieldFactory, fakeG1Factory, fakeG2Factory, fakePairing, config);
+        final Proof<FakeG1, FakeG2> proof = SerialProver.prove(CRS.provingKey(), primary, auxiliary, fieldFactory, config);
+        final boolean isValid = Verifier.verify(CRS.verificationKey(), primary, proof, fakePairing, config);
+
+        System.out.println(isValid);
+        assertTrue(isValid);
+    }
+
+    @Test
+    public void SerialFakeProofSystemTest() {
+        final int numInputs = 4;
+        final int numConstraints = 3;
+
+        FakeInitialize.init();
+        final Fp fieldFactory = new FakeFqParameters().ONE();
+        final FakeG1 fakeG1Factory = new FakeG1Parameters().ONE();
+        final FakeG2 fakeG2Factory = new FakeG2Parameters().ONE();
+        final FakePairing fakePairing = new FakePairing();
+
+        final Tuple3<R1CSRelation<Fp>, Assignment<Fp>, Assignment<Fp>> construction =
+                R1CSConstruction.serialConstruct(numConstraints, numInputs, fieldFactory, config);
+
+        //r1cs: Rank-1 Constraint System
+        final R1CSRelation<Fp> r1cs = construction._1();
+        //primary就是"statement", auxiliary就是“witness”。
+        //public input info
+        final Assignment<Fp> primary = construction._2();
+        //private input info
+        final Assignment<Fp> auxiliary = construction._3();
+
+        final CRS<Fp, FakeG1, FakeG2, FakeGT> CRS = SerialSetup.generate(r1cs, fieldFactory, fakeG1Factory, fakeG2Factory, fakePairing, config);
+        final Proof<FakeG1, FakeG2> proof = SerialProver.prove(CRS.provingKey(), primary, auxiliary, fieldFactory, config);
+        final boolean isValid = Verifier.verify(CRS.verificationKey(), primary, proof, fakePairing, config);
 
         System.out.println(isValid);
         assertTrue(isValid);

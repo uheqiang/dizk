@@ -10,6 +10,7 @@ package algebra.fields;
 import algebra.fields.abstractfieldparameters.AbstractFp3Parameters;
 
 import java.io.Serializable;
+import java.math.BigInteger;
 
 public class Fp3 extends AbstractFieldElement<Fp3> implements Serializable {
     protected final Fp c0;
@@ -41,6 +42,11 @@ public class Fp3 extends AbstractFieldElement<Fp3> implements Serializable {
 
     public Fp3 self() {
         return this;
+    }
+
+    @Override
+    public Fp3 self(BigInteger that) {
+        return null;
     }
 
     public Fp3 add(final Fp3 that) {

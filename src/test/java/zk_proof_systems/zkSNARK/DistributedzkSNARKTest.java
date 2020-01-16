@@ -35,6 +35,7 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.storage.StorageLevel;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import profiler.generation.R1CSConstruction;
@@ -46,6 +47,7 @@ import zk_proof_systems.zkSNARK.objects.CRS;
 import zk_proof_systems.zkSNARK.objects.Proof;
 
 import java.io.Serializable;
+import java.math.BigInteger;
 
 import static org.junit.Assert.assertTrue;
 
@@ -99,12 +101,8 @@ public class DistributedzkSNARKTest implements Serializable {
         final Assignment<BNFrT> primary = construction._2();
         final JavaPairRDD<Long, BNFrT> fullAssignment = construction._3();
 
-        final CRS<BNFrT, BNG1T, BNG2T, BNGTT> CRS =
-                DistributedSetup.generate(r1cs, fieldFactory, g1Factory, g2Factory, pairing, config);
-
-        final Proof<BNG1T, BNG2T> proof =
-                DistributedProver.prove(CRS.provingKeyRDD(), primary, fullAssignment, fieldFactory, config);
-
+        final CRS<BNFrT, BNG1T, BNG2T, BNGTT> CRS = DistributedSetup.generate(r1cs, fieldFactory, g1Factory, g2Factory, pairing, config);
+        final Proof<BNG1T, BNG2T> proof = DistributedProver.prove(CRS.provingKeyRDD(), primary, fullAssignment, fieldFactory, config);
         final boolean isValid = Verifier.verify(CRS.verificationKey(), primary, proof, pairing, config);
 
         System.out.println(isValid);
@@ -113,8 +111,8 @@ public class DistributedzkSNARKTest implements Serializable {
 
     @Test
     public void DistributedFakeProofSystemTest() {
-        final int numInputs = 1023;
-        final int numConstraints = 1024;
+        final int numInputs = 3;
+        final int numConstraints = 4;
 
         FakeInitialize.init();
         final Fp fieldFactory = new FakeFqParameters().ONE();
@@ -124,19 +122,26 @@ public class DistributedzkSNARKTest implements Serializable {
 
         final Tuple3<R1CSRelationRDD<Fp>, Assignment<Fp>, JavaPairRDD<Long, Fp>> construction =
                 R1CSConstruction.parallelConstruct(numConstraints, numInputs, fieldFactory, config);
+
         final R1CSRelationRDD<Fp> r1cs = construction._1();
         final Assignment<Fp> primary = construction._2();
         final JavaPairRDD<Long, Fp> fullAssignment = construction._3();
 
-        final CRS<Fp, FakeG1, FakeG2, FakeGT> CRS = DistributedSetup.generate(r1cs, fieldFactory,
-                fakeG1Factory, fakeG2Factory, fakePairing, config);
-        final Proof<FakeG1, FakeG2> proof = DistributedProver.prove(CRS.provingKeyRDD(), primary,
-                fullAssignment, fieldFactory, config);
-        final boolean isValid = Verifier.verify(CRS.verificationKey(), primary, proof,
-                fakePairing, config);
+        final CRS<Fp, FakeG1, FakeG2, FakeGT> CRS = DistributedSetup.generate(r1cs, fieldFactory, fakeG1Factory, fakeG2Factory, fakePairing, config);
+        final Proof<FakeG1, FakeG2> proof = DistributedProver.prove(CRS.provingKeyRDD(), primary, fullAssignment, fieldFactory, config);
+        final boolean isValid = Verifier.verify(CRS.verificationKey(), primary, proof, fakePairing, config);
 
         System.out.println(isValid);
         assertTrue(isValid);
+    }
+
+    @Test
+    public void add(){
+        BigInteger a = new BigInteger("1532495540865888858358347027150309178647734624407898969");
+        BigInteger b = new BigInteger("1532495540865888858358347027150309178647734624407898969");
+        BigInteger add = a.add(b);
+        System.out.println("add: " + add);
+        //Assert(new BigInteger("1532495540865888858358347027150309173676703738353129137").equals())
     }
 
     @Test

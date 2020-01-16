@@ -15,6 +15,8 @@ public abstract class AbstractFieldElement<FieldT extends AbstractFieldElement<F
     /* Returns self element */
     public abstract FieldT self();
 
+    public abstract FieldT self(final BigInteger that);
+
     /* Returns this + that */
     public abstract FieldT add(final FieldT that);
 

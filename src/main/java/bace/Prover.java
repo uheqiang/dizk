@@ -15,6 +15,7 @@ import common.Combiner;
 import common.MathUtils;
 import common.Utils;
 import org.apache.spark.api.java.JavaPairRDD;
+import relations.objects.LinearTerm;
 import scala.Tuple2;
 
 import java.util.ArrayList;

@@ -32,6 +32,11 @@ public class Fp12_2Over3Over2 extends AbstractFieldElement<Fp12_2Over3Over2>
         return this;
     }
 
+    @Override
+    public Fp12_2Over3Over2 self(BigInteger that) {
+        return null;
+    }
+
     public Fp12_2Over3Over2 add(final Fp12_2Over3Over2 that) {
         return new Fp12_2Over3Over2(c0.add(that.c0), c1.add(that.c1), Fp12Parameters);
     }

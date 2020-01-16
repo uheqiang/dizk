@@ -147,8 +147,7 @@ public class ZKSNARKProfiling {
         final BN254aPairing pairing = new BN254aPairing();
 
         final Tuple3<R1CSRelationRDD<BN254aFr>, Assignment<BN254aFr>, JavaPairRDD<Long, BN254aFr>>
-                construction =
-                R1CSConstruction.parallelConstruct(numConstraints, numInputs, fieldFactory, config);
+                construction = R1CSConstruction.parallelConstruct(numConstraints, numInputs, fieldFactory, config);
         final R1CSRelationRDD<BN254aFr> r1cs = construction._1();
         final Assignment<BN254aFr> primary = construction._2();
         final JavaPairRDD<Long, BN254aFr> fullAssignment = construction._3();
@@ -193,8 +192,7 @@ public class ZKSNARKProfiling {
         assert (isValid);
     }
 
-    public static void distributedzkSNARKLargeProfiling(
-            final Configuration config, final long numConstraints) {
+    public static void distributedzkSNARKLargeProfiling(final Configuration config, final long numConstraints) {
         final int numInputs = 1023;
 
         final BN254bFr fieldFactory = new BN254bFr(2L);
@@ -203,8 +201,7 @@ public class ZKSNARKProfiling {
         final BN254bPairing pairing = new BN254bPairing();
 
         final Tuple3<R1CSRelationRDD<BN254bFr>, Assignment<BN254bFr>, JavaPairRDD<Long, BN254bFr>>
-                construction =
-                R1CSConstruction.parallelConstruct(numConstraints, numInputs, fieldFactory, config);
+                construction = R1CSConstruction.parallelConstruct(numConstraints, numInputs, fieldFactory, config);
         final R1CSRelationRDD<BN254bFr> r1cs = construction._1();
         final Assignment<BN254bFr> primary = construction._2();
         final JavaPairRDD<Long, BN254bFr> fullAssignment = construction._3();

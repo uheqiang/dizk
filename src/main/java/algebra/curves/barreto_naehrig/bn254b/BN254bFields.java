@@ -43,6 +43,11 @@ public class BN254bFields {
             return this;
         }
 
+        @Override
+        public BN254bFr self(BigInteger that) {
+            return null;
+        }
+
         public Fp element() {
             return element;
         }
@@ -101,6 +106,11 @@ public class BN254bFields {
 
         public BN254bFq self() {
             return this;
+        }
+
+        @Override
+        public BN254bFq self(BigInteger that) {
+            return null;
         }
 
         public Fp element() {
@@ -166,6 +176,11 @@ public class BN254bFields {
             return this;
         }
 
+        @Override
+        public BN254bFq2 self(BigInteger that) {
+            return null;
+        }
+
         public Fp2 element() {
             return this.element;
         }
@@ -217,6 +232,11 @@ public class BN254bFields {
             return this;
         }
 
+        @Override
+        public BN254bFq6 self(BigInteger that) {
+            return null;
+        }
+
         public Fp6_3Over2 element() {
             return this.element;
         }
@@ -263,6 +283,11 @@ public class BN254bFields {
 
         public BN254bFq12 self() {
             return this;
+        }
+
+        @Override
+        public BN254bFq12 self(BigInteger that) {
+            return null;
         }
 
         public Fp12_2Over3Over2 element() {
