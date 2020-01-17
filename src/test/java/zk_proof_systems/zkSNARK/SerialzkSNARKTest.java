@@ -28,26 +28,18 @@ import algebra.curves.fake.fake_parameters.FakeFqParameters;
 import algebra.curves.fake.fake_parameters.FakeG1Parameters;
 import algebra.curves.fake.fake_parameters.FakeG2Parameters;
 import algebra.fields.Fp;
-import com.google.common.base.StandardSystemProperty;
 import configuration.Configuration;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import profiler.generation.R1CSConstruction;
-import profiler.utils.SparkUtils;
 import relations.objects.Assignment;
 import relations.r1cs.R1CSRelation;
 import scala.Tuple3;
-import scala.util.parsing.combinator.testing.Str;
 import zk_proof_systems.zkSNARK.objects.CRS;
 import zk_proof_systems.zkSNARK.objects.Proof;
 
 import java.io.Serializable;
 import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
 
 import static org.junit.Assert.assertTrue;
 
@@ -104,24 +96,18 @@ public class SerialzkSNARKTest implements Serializable {
     @Test
     public void rangProofSystemTest(){
 //        System.out.println(new BigInteger("2").pow(256));
-        BigInteger w = new BigInteger("20", 10);
+        BigInteger w = new BigInteger("333333333333333333333", 10);
         String str = w.toString(2);
         System.out.println(str);
         char[] chars = str.toCharArray();
-        char[] reverse = reverse(chars);
-        System.out.println(String.valueOf(reverse));
-//        int tmp = 0;
-//        for (int i = 0; i < reverse.length; i++){
-//            tmp += Integer.valueOf(String.valueOf(reverse[i]))<<i;
-//        }
-//        System.out.println(tmp);
+        Integer[] reverse = reverse(chars);
 
-        final int numInputs = 1;
         FakeInitialize.init();
         final Fp fieldFactory = new FakeFqParameters().ONE();
         final FakeG1 fakeG1Factory = new FakeG1Parameters().ONE();
         final FakeG2 fakeG2Factory = new FakeG2Parameters().ONE();
         final FakePairing fakePairing = new FakePairing();
+        final int numInputs = 1;
         final Tuple3<R1CSRelation<Fp>, Assignment<Fp>, Assignment<Fp>> construction =
                 R1CSConstruction.serialRangProofConstruct(numInputs,reverse,w,fieldFactory);
         //r1cs: Rank-1 Constraint System
@@ -141,10 +127,10 @@ public class SerialzkSNARKTest implements Serializable {
         assertTrue(isValid);
     }
 
-    private static char[] reverse(char[] chars){
-        char[] cs = new char[chars.length];
+    private static Integer[] reverse(char[] chars){
+        Integer[] cs = new Integer[chars.length];
         for (int i = chars.length - 1;i>=0;i--){
-            cs[chars.length - i - 1] = chars[i];
+            cs[chars.length - i - 1] = Integer.valueOf(String.valueOf(chars[i]));
         }
         return cs;
     }

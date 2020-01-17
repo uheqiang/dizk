@@ -10,7 +10,6 @@ package profiler.generation;
 import algebra.fields.AbstractFieldElementExpanded;
 import common.Utils;
 import configuration.Configuration;
-import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.spark.api.java.JavaPairRDD;
 import relations.objects.*;
 import relations.r1cs.R1CSRelation;
@@ -167,104 +166,95 @@ public class R1CSConstruction implements Serializable {
 
     public static <FieldT extends AbstractFieldElementExpanded<FieldT>> Tuple3<R1CSRelation<FieldT>,
             Assignment<FieldT>, Assignment<FieldT>> serialRangProofConstruct(final int numInputs,
-                                                                             final char[] wBits,
+                                                                             final Integer[] wBits,
                                                                              final BigInteger w,
                                                                              final FieldT fieldFactory) {
-        assert(wBits.length > 256);
+        assert(wBits.length < 256);
 
         // 一个R1CS系统，包括多个R1CS约束。
-        final int numConstraints = (1 + wBits.length)*2 + 1;//13
-        assert (numInputs <= numConstraints + 1);
-
-//        final int numAuxiliary = 3 + numConstraints - numInputs;
-        final int numAuxiliary = 2 + numConstraints - numInputs;
-        final int numVariables = numInputs + numAuxiliary;
-
-        final FieldT one = fieldFactory.one();
+        int numConstraints = (1 + wBits.length) * 2;
+        assert (numInputs <= numConstraints + 1);//numInputs == 1
 
         final Assignment<FieldT> oneFullAssignment = new Assignment<>();
-        oneFullAssignment.add(one);
-//        oneFullAssignment.add(fieldFactory.self(new BigInteger(String.valueOf(wBits[0]))));
-//        oneFullAssignment.add(fieldFactory.self(new BigInteger("1")));//2^0
+        final FieldT one = fieldFactory.one();
+        final FieldT a = fieldFactory.self(BigInteger.valueOf(wBits[0]));
+        final FieldT b = fieldFactory.self(BigInteger.valueOf(1));
+        oneFullAssignment.add(one);//1
+        oneFullAssignment.add(a);//wBits[0]
+        oneFullAssignment.add(b);//2^0
 
-        FieldT sum = fieldFactory.zero();
-        FieldT tmp = fieldFactory.zero();
+        int numAuxiliary = oneFullAssignment.size() + numConstraints - numInputs;
+
+        FieldT tmpSum = fieldFactory.zero();
+        FieldT tmpMul = fieldFactory.zero();
         final R1CSConstraints<FieldT> constraints = new R1CSConstraints<>();
-        for (int i = 0; i <= numConstraints - 2; i++) {
-            //一个R1CS约束，可以由a/b/c三个linear_combination表示。
-            //LinearCombination描述了一个完整的线性组合。一个linear combination由多个linear term组成
+        for (int i = 0; i < numConstraints; i++) {
             final LinearCombination<FieldT> A = new LinearCombination<>();
             final LinearCombination<FieldT> B = new LinearCombination<>();
             final LinearCombination<FieldT> C = new LinearCombination<>();
 
             if (i % 2 == 0) {
-                // a * b = c
-                A.add(new LinearTerm<>((long) i + 1, one));
-                B.add(new LinearTerm<>((long) i + 2, one));
-                C.add(new LinearTerm<>((long) i + 3, one));
-
-                if (i != numConstraints - 3){
-                   //wBits
-                    Integer multi = Integer.valueOf(String.valueOf(wBits[i/2])) << i/2;
-                    tmp = fieldFactory.self(BigInteger.valueOf(multi));
+                if (i == 0){
+                    // a * b = c
+                    A.add(new LinearTerm<>((long) i + 1, one));
+                    B.add(new LinearTerm<>((long) i + 2, one));
+                    C.add(new LinearTerm<>((long) i + 3, one));
+                    //wBits
+                    FieldT tmp = a.mul(b);
                     oneFullAssignment.add(tmp);
+                    tmpMul = tmp;
                 } else {
-                    //w
-                    tmp = fieldFactory.self(BigInteger.valueOf(-1).multiply(w));
-                    oneFullAssignment.add(tmp);
+                    // a * b = c
+                    A.add(new LinearTerm<>((long) 2*i + 2, one));
+                    B.add(new LinearTerm<>((long) 2*i + 3, one));
+                    C.add(new LinearTerm<>((long) 2*i + 4, one));
+
+                    FieldT tmp;
+                    if (i != numConstraints - 2){
+                        //wBits
+                        Integer multi = Integer.valueOf(String.valueOf(wBits[i/2])) << i/2;
+                        tmp = fieldFactory.self(BigInteger.valueOf(multi));
+                        oneFullAssignment.add(fieldFactory.self(BigInteger.valueOf(wBits[i/2])));
+                        oneFullAssignment.add(fieldFactory.self(BigInteger.valueOf(1 << i/2)));
+                        oneFullAssignment.add(tmp);
+                        numAuxiliary += 2;
+                    } else {
+                        //w
+                        tmp = fieldFactory.self(BigInteger.valueOf(-1).multiply(w));
+                        oneFullAssignment.add(fieldFactory.self(BigInteger.valueOf(-1)));
+                        oneFullAssignment.add(fieldFactory.self(w));
+                        oneFullAssignment.add(tmp);
+                        numAuxiliary += 2;
+                    }
+                    tmpMul = tmp;
                 }
             } else {
-                // a + b = c
-                A.add(new LinearTerm<>((long) i + 1, one));
-                A.add(new LinearTerm<>((long) i + 2, one));
-                B.add(new LinearTerm<>((long) 0, one));
-                C.add(new LinearTerm<>((long) i + 3, one));
+                if (i == 1){
+                    // a + b = c
+                    A.add(new LinearTerm<>((long) i + 2, one));
+                    A.add(new LinearTerm<>((long) i + 3, one));
+                    B.add(new LinearTerm<>((long) 0, one));
+                    C.add(new LinearTerm<>((long) i + 4, one));
 
-                sum = sum.add(tmp);
-                oneFullAssignment.add(sum);
+                    oneFullAssignment.add(fieldFactory.zero());
+                    FieldT tmp = fieldFactory.zero().add(tmpMul);
+                    oneFullAssignment.add(tmp);
+                    tmpSum = tmp;
+                    numAuxiliary += 1;
+                } else {
+                    // a + b = c
+                    A.add(new LinearTerm<>((long) 2*i - 1, one));
+                    A.add(new LinearTerm<>((long) 2*i + 2, one));
+                    B.add(new LinearTerm<>((long) 0, one));
+                    C.add(new LinearTerm<>((long) 2*i + 3, one));
+
+                    FieldT tmp = tmpMul.add(tmpSum);
+                    oneFullAssignment.add(tmp);
+                    tmpSum = tmp;
+                }
             }
             constraints.add(new R1CSConstraint<>(A, B, C));
-
-//            if (i != numConstraints - 1){
-//                //wBits
-//            } else {
-//                //w
-//                // a * b = c
-//                A.add(new LinearTerm<>((long) i + 1, one));
-//                B.add(new LinearTerm<>((long) i + 2, one));
-//                C.add(new LinearTerm<>((long) i + 3, one));
-//                constraints.add(new R1CSConstraint<>(A, B, C));
-//                final FieldT tmp = fieldFactory.self(BigInteger.valueOf(-1)).mul(fieldFactory.self(w));
-//                oneFullAssignment.add(tmp);
-//
-//                // a + b = c
-//                A.add(new LinearTerm<>((long) i + 1, one));
-//                A.add(new LinearTerm<>((long) i + 2, one));
-//                B.add(new LinearTerm<>((long) 0, one));
-//                C.add(new LinearTerm<>((long) i + 3, one));
-//
-//                final FieldT result = sum.add(tmp);
-//                oneFullAssignment.add(result);
-//                constraints.add(new R1CSConstraint<>(A, B, C));
-//            }
-
         }
-
-        final LinearCombination<FieldT> A = new LinearCombination<>();
-        final LinearCombination<FieldT> B = new LinearCombination<>();
-        final LinearCombination<FieldT> C = new LinearCombination<>();
-
-        FieldT res = fieldFactory.zero();
-        for (int i = 1; i < numVariables - 1; i++) {
-            A.add(new LinearTerm<>((long) i, one));
-            B.add(new LinearTerm<>((long) i, one));
-
-            res = res.add(oneFullAssignment.get(i));
-        }
-        C.add(new LinearTerm<>((long) numVariables - 1, one));
-        oneFullAssignment.add(res.square());
-
-        constraints.add(new R1CSConstraint<>(A, B, C));
 
         final R1CSRelation<FieldT> r1cs = new R1CSRelation<>(constraints, numInputs, numAuxiliary);
         final Assignment<FieldT> primary = new Assignment<>(oneFullAssignment.subList(0, numInputs));
@@ -272,15 +262,8 @@ public class R1CSConstruction implements Serializable {
 
         assert (r1cs.numInputs() == numInputs);
         assert (r1cs.numVariables() >= numInputs);
-
-//        System.out.println(r1cs.numVariables());
-//        System.out.println(oneFullAssignment.size());
         assert (r1cs.numVariables() == oneFullAssignment.size());
-
-        System.out.println(r1cs.numConstraints());
-        System.out.println(numConstraints);
         assert (r1cs.numConstraints() == numConstraints);
-
         assert (r1cs.isSatisfied(primary, auxiliary));
 
         return new Tuple3<>(r1cs, primary, auxiliary);
@@ -302,7 +285,6 @@ public class R1CSConstruction implements Serializable {
         final int numInputs = 2;
         final int numConstraints = 2;
         assert (numInputs <= numConstraints + 1);
-//        final int numAuxiliary = 4 + numConstraints - numInputs;
 
         final FieldT one = fieldFactory.one();
         FieldT a = fieldFactory.self(new BigInteger(balanceHash,16));
@@ -315,6 +297,7 @@ public class R1CSConstruction implements Serializable {
         oneFullAssignment.add(b);
         oneFullAssignment.add(c);
 
+//        final int numAuxiliary = 4 + numConstraints - numInputs;
         final int numAuxiliary = oneFullAssignment.size() + numConstraints - numInputs;
 
         final R1CSConstraints<FieldT> constraints = new R1CSConstraints<>();
@@ -404,7 +387,7 @@ public class R1CSConstruction implements Serializable {
             final LinearCombination<FieldT> B = new LinearCombination<>();
             final LinearCombination<FieldT> C = new LinearCombination<>();
 
-            if (i % 2 != 0) {
+            if (i % 2 == 0) {
                 // a * b = c.
                 A.add(new LinearTerm<>((long) i + 1, one));
                 B.add(new LinearTerm<>((long) i + 2, one));
@@ -416,10 +399,10 @@ public class R1CSConstruction implements Serializable {
                 oneFullAssignment.add(tmp);
             } else {
                 // a + b = c
-                A.add(new LinearTerm<>((long) i + 1, one));
-                A.add(new LinearTerm<>((long) i + 2, one));
+                A.add(new LinearTerm<>((long) i + 1, one));//i+2
+                A.add(new LinearTerm<>((long) i + 2, one));//i+3
                 B.add(new LinearTerm<>((long) 0, one));
-                C.add(new LinearTerm<>((long) i + 3, one));
+                C.add(new LinearTerm<>((long) i + 3, one));//i+4
 
                 final FieldT tmp = a.add(b);
                 System.out.println("c: " + tmp.toBigInteger());
